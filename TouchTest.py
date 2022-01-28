@@ -10,27 +10,51 @@ import mathutils
 class TouchInput(bpy.types.Operator):
     bl_idname = "view3d.touch_view"
     bl_label = "Touch View"
+    
+    mode: bpy.props.EnumProperty(
+        name="Mode", 
+        description="Sets the viewport control type",
+        items={
+            ('ORBIT','rotate','Rotate the viewport'),
+            ('PAN','pan','Move the viewport'),
+            ('DOLLY','zoom','Zoom in/out the viewport')
+        },
+        default="ORBIT")
 
     def execute(self, context):
-        bpy.ops.view3d.view_orbit(angle=self.angle.x, type="ORBITRIGHT")
-        bpy.ops.view3d.view_orbit(angle=self.angle.y, type="ORBITUP")
+        if self.mode == "ORBIT":
+            bpy.ops.view3d.view_orbit(angle=self.delta.x/180, type="ORBITRIGHT")
+            bpy.ops.view3d.view_orbit(angle=self.delta.y/180, type="ORBITUP")
+        elif self.mode == "PAN":
+            if self.delta.y > 0:
+                bpy.ops.view3d.view_pan("INVOKE_REGION_WIN",type="PANUP")
+            if self.delta.y < 0:
+                bpy.ops.view3d.view_pan("INVOKE_REGION_WIN",type="PANDOWN")
+            if self.delta.x > 0:
+                bpy.ops.view3d.view_pan("INVOKE_REGION_WIN",type="PANRIGHT")
+            if self.delta.x < 0:
+                bpy.ops.view3d.view_pan("INVOKE_REGION_WIN",type="PANLEFT")
+        elif self.mode == "DOLLY":
+            bpy.ops.view3d.dolly()
         return {'FINISHED'}
 
     def modal(self, context, event):
         if event.type == 'MOUSEMOVE':  # Apply
             #print(event.id_data)
-            self.angle.x = (event.mouse_prev_x - event.mouse_x) / 180
-            self.angle.y = (event.mouse_prev_y - event.mouse_y) / 180
+            self.delta.x = (event.mouse_prev_x - event.mouse_x)
+            self.delta.y = (event.mouse_prev_y - event.mouse_y)
             self.execute(context)
         elif event.type == 'LEFTMOUSE' and event.value == 'RELEASE':  # Confirm
             return {'FINISHED'}
         elif event.type == 'ESC':  # Cancel\
             return {'CANCELLED'}
-        
+        elif event.type not in {'INBETWEEN_MOUSEMOVE', 'TIMER_REPORT'}:
+            print(event.type, event.value)
         return {'RUNNING_MODAL'}
 
     def invoke(self, context, event):
-        self.angle = mathutils.Vector((0.0,0.0))
+        self.delta = mathutils.Vector((0.0,0.0))
+        self.mode = "PAN"
         self.execute(context)
 
         context.window_manager.modal_handler_add(self)
