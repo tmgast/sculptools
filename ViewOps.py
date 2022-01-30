@@ -8,7 +8,7 @@ import bpy
 import math
 from mathutils import Vector
 import gpu
-import bgl
+from bgl import *
 from gpu_extras.batch import batch_for_shader    
 
 class TouchInput(bpy.types.Operator):
@@ -36,9 +36,10 @@ class TouchInput(bpy.types.Operator):
     
     def invoke(self, context, event):
         self.delta = Vector((event.mouse_region_x, event.mouse_region_y))
+        wm = bpy.context.window_manager
         mid_point = self.getMidPoint(context.area)
-        dolly_scale = context.area.ov.dolly_wid
-        pan_scale = context.area.ov.pan_rad
+        dolly_scale = wm.dolly_wid
+        pan_scale = wm.pan_rad
         
         dolly_wid = mid_point.x * dolly_scale
         pan_diameter = math.dist((0,0), mid_point) * (pan_scale*0.4)
@@ -81,25 +82,7 @@ class Overlay:
     def __init__(self, area):
         self.area = area
         self.pointer = str(area.as_pointer())
-        overlays = []
-    
-        wm = bpy.types.WindowManager.viewops_conf
-        wm[self.pointer+"dolly_wid"]: bpy.props.FloatProperty(
-            name="Rail Width", 
-            default=0.4, 
-            min=0.1, 
-            max=1
-        )
-        wm[self.pointer+"pan_rad"]: bpy.props.FloatProperty(
-            name="Center Radius", 
-            default=0.35, 
-            min=0.1, 
-            max=1.0
-        )
-        wm[self.pointer+"isVisible"]: bpy.props.BoolProperty(
-            name="Show Overlay", 
-            default=False
-        )
+        self.overlays = []
         
     def get(self, attr):
         wm = bpy.types.WindowManager.viewops_conf
@@ -115,7 +98,6 @@ class Overlay:
 
 class OverlayAgent:
     def __init__(self):
-        bpy.app.timers.register(self.refresh_overlays)
         self.views = []
         
     def indexView(self, area):
@@ -130,7 +112,7 @@ class OverlayAgent:
 
     def refresh_overlays(self):
         self.update_overlay()
-        return None
+        return 0.1
 
     def init_viewport(self, view):
         ao = self.findView(view)
@@ -144,37 +126,37 @@ class OverlayAgent:
         for area in bpy.context.window.screen.areas.values():
             if area.type != "VIEW_3D": continue
             a, ov = self.init_viewport(area)
+            wm = bpy.context.window_manager
 
-            if ov.get("isVisible"):
-                wd = area.width
-                ht = area.height
-                print(ov.get("pan_rad"))
-                pan_diameter = math.dist((0,0), (wd/2, ht/2)) * (ov.get("pan_rad") * 0.4)
+            if wm.isVisible:
+                wd = a.width
+                ht = a.height
+                pan_diameter = math.dist((0,0), (wd/2, ht/2)) * (wm.pan_rad * 0.4)
                 
                 left_rail = (
                     Vector((0.0,0.0)), 
-                    Vector((wd/2*ov.get("dolly_wid"), ht))
+                    Vector((wd/2*wm.dolly_wid, ht))
                 )
                 right_rail = (
                     Vector((wd,0.0)), 
-                    Vector((wd - wd/2*ov.get("dolly_wid"), ht))
+                    Vector((wd - wd/2*wm.dolly_wid, ht))
                 )
                 mid_ring = (
                     Vector((wd/2, ht/2)),
                     pan_diameter
                 )
-                area.ov.add_overlay(
+                ov.add_overlay(
                     overlay_manager.renderShape(
                         "left_rail", "RECT", left_rail, (0,0.5,0.5,0.10)
                 ))
-                area.ov.add_overlay(
+                ov.add_overlay(
                     overlay_manager.renderShape(
                         "right_rail",
                         "RECT",
                         right_rail,
                         (0,0.5,0.5,0.10)
                 ))
-                area.ov.add_overlay(
+                ov.add_overlay(
                     overlay_manager.renderShape(
                         "mid_ring",
                         "CIRC",
@@ -183,10 +165,8 @@ class OverlayAgent:
                 ))
 
     def clearAll(self):
-        for area in bpy.context.window.screen.areas.values():
-            if area.type != "VIEW_3D": continue
-            if not hasattr(area.spaces.data, "ov"): continue
-            area.spaces.data.ov.clear_overlays()
+        for area, overlay in self.views:
+            overlay.clear_overlays()
             area.tag_redraw()
 
     def renderShape(self, name, shape, args, color):
@@ -207,8 +187,7 @@ class OverlayAgent:
             )
         else:
             return {"INVALID_SHAPE"}
-            
-        bpy.context.area.tag_redraw()
+
         return _handle
 
     def drawVectorBox(self, a, b, color):
@@ -273,25 +252,42 @@ class PanelOne(View3DPanel, bpy.types.Panel):
     bl_label = "Viewport Settings"
 
     def draw(self, context):
-        overlay_manager.update_overlay()
-        a, ov = overlay_manager.findView(context.area)
+#        overlay_manager.update_overlay()
+        wm = context.window_manager
         self.layout.label(text="Control Zones")
-        row = self.layout.row()
-        self.layout.prop(a.spaces.data, "dolly_wid")
-        row = self.layout.row()
-        self.layout.prop(a.spaces.data, "pan_rad")
-        row = self.layout.row()
-        self.layout.prop(a.spaces.data, "isVisible", text="Show Overlay")
+        self.layout.row()
+        self.layout.prop(wm, "dolly_wid")
+        self.layout.row()
+        self.layout.prop(wm, "pan_rad")
+        self.layout.row()
+        self.layout.prop(wm, "isVisible", text="Show Overlay")
 
 addon_keymaps = []
 
 def register():
     wm = bpy.context.window_manager   
-    bpy.types.WindowManager.viewops_conf = {}
     bpy.utils.register_class(TouchInput)
+    
+    bpy.types.WindowManager.dolly_wid = bpy.props.FloatProperty(
+        name="Rail Width", 
+        default=0.4, 
+        min=0.1, 
+        max=1
+    )
+    bpy.types.WindowManager.pan_rad = bpy.props.FloatProperty(
+        name="Center Radius", 
+        default=0.35, 
+        min=0.1, 
+        max=1.0
+    )
+    bpy.types.WindowManager.isVisible = bpy.props.BoolProperty(
+        name="Show Overlay", 
+        default=False 
+    )
 
 #    bpy.app.handlers.load_post.append(load_handler)
     bpy.utils.register_class(PanelOne)
+    bpy.app.timers.register(overlay_manager.refresh_overlays, first_interval=1)
     
     #view_center_pick
     #view_center_cursor
@@ -316,6 +312,7 @@ def register():
 
 def unregister():
     overlay_manager.clearAll()
+    del overlay_manager
     bpy.utils.unregister_class(TouchInput)
     bpy.utils.unregister_class(PanelOne)
 
