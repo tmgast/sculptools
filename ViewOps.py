@@ -1,7 +1,13 @@
 bl_info = {
     "name": "Touch Viewport",
+    "description": "Creates active touch zones over View 3D areas for easier viewport navigation with touch screens and pen tablets.",
+    "author": "Nendo Sculpt Tools",
+    "version": (0, 1),
     "blender": (2, 80, 0),
-    "category": "View 3D",
+    "location": "View3D > Tools > Nendo",
+    "warning": "",
+    "wiki_url": "",
+    "category": "3D View",
 }
 
 import bpy
@@ -12,6 +18,7 @@ from bgl import *
 from gpu_extras.batch import batch_for_shader    
 
 class TouchInput(bpy.types.Operator):
+    """ Active Viewport control zones """
     bl_idname = "view3d.view_ops"
     bl_label = "Viewport Control Regions"
     
@@ -163,6 +170,7 @@ class OverlayAgent:
                         mid_ring,
                         (00.5,0.2,0.2,0.10)
                 ))
+            return True
 
     def clearAll(self):
         for area, overlay in self.views:
@@ -245,14 +253,14 @@ overlay_manager = OverlayAgent()
 class View3DPanel:
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_category = "ViewOps"
+    bl_category = "Nendo"
     
 class PanelOne(View3DPanel, bpy.types.Panel):
     bl_idname = "VIEW3D_PT_view_ops"
     bl_label = "Viewport Settings"
 
     def draw(self, context):
-#        overlay_manager.update_overlay()
+        overlay_manager.update_overlay()
         wm = context.window_manager
         self.layout.label(text="Control Zones")
         self.layout.row()
@@ -265,7 +273,6 @@ class PanelOne(View3DPanel, bpy.types.Panel):
 addon_keymaps = []
 
 def register():
-    wm = bpy.context.window_manager   
     bpy.utils.register_class(TouchInput)
     
     bpy.types.WindowManager.dolly_wid = bpy.props.FloatProperty(
@@ -285,7 +292,6 @@ def register():
         default=False 
     )
 
-#    bpy.app.handlers.load_post.append(load_handler)
     bpy.utils.register_class(PanelOne)
     bpy.app.timers.register(overlay_manager.refresh_overlays, first_interval=1)
     
@@ -295,6 +301,7 @@ def register():
     #view_lock_to_active
     #view_lock_clear
     
+    wm = bpy.context.window_manager   
     km = wm.keyconfigs.addon.keymaps.new(name='', space_type='EMPTY')
     kmi = km.keymap_items.new('view3d.view_ops', 'MIDDLEMOUSE', 'PRESS')
     addon_keymaps.append((km, kmi)) 
