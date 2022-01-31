@@ -1,3 +1,21 @@
+# ##### BEGIN GPL LICENSE BLOCK #####
+#
+#  This program is free software; you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation; either version 2
+#  of the License, or (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software Foundation,
+#  Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+#
+# ##### END GPL LICENSE BLOCK #####
+
 bl_info = {
     "name": "Touch Viewport",
     "description": "Creates active touch zones over View 3D areas for easier viewport navigation with touch screens and pen tablets.",
@@ -117,10 +135,6 @@ class OverlayAgent:
             if area == view: return (area, overlay)
         return False
 
-    def refresh_overlays(self):
-        self.update_overlay()
-        return 0.1
-
     def init_viewport(self, view):
         ao = self.findView(view)
         if ao == False: return self.indexView(view)
@@ -128,14 +142,14 @@ class OverlayAgent:
 
     def update_overlay(self):
         self.clearAll()
+        wm = bpy.context.window_manager
+        if not hasattr(wm, "isVisible"): return
 
-        # find/register all viewports
-        for area in bpy.context.window.screen.areas.values():
-            if area.type != "VIEW_3D": continue
-            a, ov = self.init_viewport(area)
-            wm = bpy.context.window_manager
-
-            if wm.isVisible:
+        if wm.isVisible:
+            # find/register all viewports
+            for area in bpy.context.window.screen.areas.values():
+                if area.type != "VIEW_3D": continue
+                a, ov = self.init_viewport(area)
                 wd = a.width
                 ht = a.height
                 pan_diameter = math.dist((0,0), (wd/2, ht/2)) * (wm.pan_rad * 0.4)
@@ -170,12 +184,13 @@ class OverlayAgent:
                         mid_ring,
                         (00.5,0.2,0.2,0.10)
                 ))
-            return True
+                return True
 
     def clearAll(self):
         for area, overlay in self.views:
             overlay.clear_overlays()
             area.tag_redraw()
+        self.views = []
 
     def renderShape(self, name, shape, args, color):
         # create draw call
@@ -236,8 +251,6 @@ class OverlayAgent:
         batch.draw(shader)
         glDisable(GL_BLEND)
 
-overlay_manager = OverlayAgent()
-
     ## NEED TO TEST
 #@persistent
 #def load_handler(dummy):
@@ -245,6 +258,10 @@ overlay_manager = OverlayAgent()
 
     ## need to add functionality to track draw handlers 
     ##    and monitor sources for change to invoke tag_redraw()
+def handle_redraw():
+    global overlay_manager
+    overlay_manager.update_overlay()
+    return 0.1
  
 #########################################
 ### END DRAW SCRIPT
@@ -274,6 +291,12 @@ addon_keymaps = []
 
 def register():
     bpy.utils.register_class(TouchInput)
+    bpy.utils.register_class(PanelOne)
+
+    global overlay_manager
+    overlay_manager = OverlayAgent()
+    if not bpy.app.timers.is_registered(handle_redraw):
+        bpy.app.timers.register(handle_redraw, first_interval=1)
     
     bpy.types.WindowManager.dolly_wid = bpy.props.FloatProperty(
         name="Rail Width", 
@@ -291,9 +314,6 @@ def register():
         name="Show Overlay", 
         default=False 
     )
-
-    bpy.utils.register_class(PanelOne)
-    bpy.app.timers.register(overlay_manager.refresh_overlays, first_interval=1)
     
     #view_center_pick
     #view_center_cursor
@@ -318,14 +338,21 @@ def register():
     addon_keymaps.append((km, kmi))
 
 def unregister():
+    global overlay_manager
+    if bpy.app.timers.is_registered(handle_redraw):
+        bpy.app.timers.unregister(handle_redraw)
     overlay_manager.clearAll()
     del overlay_manager
-    bpy.utils.unregister_class(TouchInput)
-    bpy.utils.unregister_class(PanelOne)
+    del bpy.types.WindowManager.dolly_wid
+    del bpy.types.WindowManager.pan_rad
+    del bpy.types.WindowManager.isVisible
 
     for km, kmi in addon_keymaps:
         km.keymap_items.remove(kmi)
     addon_keymaps.clear()
+
+    bpy.utils.unregister_class(PanelOne)
+    bpy.utils.unregister_class(TouchInput)
     
 
 if __name__ == "__main__":
