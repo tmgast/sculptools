@@ -19,10 +19,10 @@
 bl_info = {
     "name": "Touch Viewport",
     "description": "Creates active touch zones over View 3D areas for easier viewport navigation with touch screens and pen tablets.",
-    "author": "Nendo Sculpt Tools",
+    "author": "NENDO",
     "version": (0, 1),
     "blender": (2, 80, 0),
-    "location": "View3D > Tools > Nendo",
+    "location": "View3D > Tools > NENDO",
     "warning": "",
     "wiki_url": "",
     "category": "3D View",
@@ -89,20 +89,6 @@ class TouchInput(bpy.types.Operator):
     def getMidPoint(self, area):
         return self.getArea(area)/2
 
-    
-#########################################
-### BEGIN DRAW SCRIPT
-#########################################    
-# import bpy
-# from mathutils import Vector
-# import gpu
-# from bgl import *
-# from gpu_extras.batch import batch_for_shader
-
-###
-### NEED REWRITE TO USE TIMER AND UPDATE SCREEN AREAS
-###    ONLY IF SHOW OVERLAY IS ON
-###
 class Overlay:
     def __init__(self, area):
         self.area = area
@@ -146,7 +132,6 @@ class OverlayAgent:
         if not hasattr(wm, "isVisible"): return
 
         if wm.isVisible:
-            # find/register all viewports
             for area in bpy.context.window.screen.areas.values():
                 if area.type != "VIEW_3D": continue
                 a, ov = self.init_viewport(area)
@@ -168,21 +153,21 @@ class OverlayAgent:
                 )
                 ov.add_overlay(
                     overlay_manager.renderShape(
-                        "left_rail", "RECT", left_rail, (0,0.5,0.5,0.10)
+                        "left_rail", "RECT", left_rail, (1,1,1,0.01)
                 ))
                 ov.add_overlay(
                     overlay_manager.renderShape(
                         "right_rail",
                         "RECT",
                         right_rail,
-                        (0,0.5,0.5,0.10)
+                        (1,1,1,0.01)
                 ))
                 ov.add_overlay(
                     overlay_manager.renderShape(
                         "mid_ring",
                         "CIRC",
                         mid_ring,
-                        (00.5,0.2,0.2,0.10)
+                        (1,1,1,0.01)
                 ))
                 return True
 
@@ -251,26 +236,15 @@ class OverlayAgent:
         batch.draw(shader)
         glDisable(GL_BLEND)
 
-    ## NEED TO TEST
-#@persistent
-#def load_handler(dummy):
-#    print("Load Handler:", bpy.data.filepath)
-
-    ## need to add functionality to track draw handlers 
-    ##    and monitor sources for change to invoke tag_redraw()
 def handle_redraw():
     global overlay_manager
     overlay_manager.update_overlay()
     return 0.1
- 
-#########################################
-### END DRAW SCRIPT
-#########################################
 
 class View3DPanel:
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_category = "Nendo"
+    bl_category = "NENDO"
     
 class PanelOne(View3DPanel, bpy.types.Panel):
     bl_idname = "VIEW3D_PT_view_ops"
@@ -299,13 +273,13 @@ def register():
         bpy.app.timers.register(handle_redraw, first_interval=1)
     
     bpy.types.WindowManager.dolly_wid = bpy.props.FloatProperty(
-        name="Rail Width", 
+        name="Width", 
         default=0.4, 
         min=0.1, 
         max=1
     )
     bpy.types.WindowManager.pan_rad = bpy.props.FloatProperty(
-        name="Center Radius", 
+        name="Radius", 
         default=0.35, 
         min=0.1, 
         max=1.0
@@ -314,12 +288,6 @@ def register():
         name="Show Overlay", 
         default=False 
     )
-    
-    #view_center_pick
-    #view_center_cursor
-    #view_center_lock
-    #view_lock_to_active
-    #view_lock_clear
     
     wm = bpy.context.window_manager   
     km = wm.keyconfigs.addon.keymaps.new(name='', space_type='EMPTY')
